@@ -264,13 +264,19 @@
     <strong id="driveInfoTitle">Sinkronisasi Google Drive</strong><br>
     <span id="driveInfoBody">Login terlebih dahulu untuk mengaktifkan sinkronisasi otomatis. Data tersimpan ke <strong>buku_kas_data.json</strong> di Drive kamu.</span>
   </div>
-  <div class="data-actions" style="gap:10px;">
+  <div class="data-actions" style="gap:10px; margin-bottom:12px;">
     <button class="btn" onclick="openExportModal()">↓ Ekspor Nota PDF</button>
     <button class="btn btn-ghost" onclick="exportToCSV()">⊞ Ekspor ke Spreadsheet / Excel</button>
     <button class="btn btn-ghost" id="manualSyncBtn" onclick="manualSync()" style="display:none;">⟳ Sinkronisasi</button>
     <button class="btn btn-ghost" onclick="document.getElementById('importFile').click()">↑ Impor JSON</button>
     <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
     <button class="btn btn-danger" onclick="clearAll()">✕ Hapus Semua Data</button>
+  </div>
+  <div style="display:flex; align-items:center; gap:16px; margin-bottom:20px; flex-wrap:wrap;">
+    <label style="cursor:pointer; display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--text-dim);">
+      <input type="checkbox" id="csvIncludeSavings" checked class="custom-cb">
+      Sertakan data Rencana Tabungan saat ekspor Spreadsheet / Excel
+    </label>
   </div>
 
   <div class="settings-group" style="margin-top:20px;">
@@ -414,6 +420,7 @@
         <label class="checkbox-row"><input type="checkbox" id="expTx" checked><span>Daftar transaksi (pengeluaran & pemasukan)</span></label>
         <label class="checkbox-row"><input type="checkbox" id="expDebt" checked><span>Hutang & Piutang</span></label>
         <label class="checkbox-row"><input type="checkbox" id="expSummary" checked><span>Ringkasan per kategori</span></label>
+        <label class="checkbox-row"><input type="checkbox" id="expSavings" checked><span>Rencana Tabungan</span></label>
         <label class="checkbox-row"><input type="checkbox" id="expMonthly"><span>Tabel ringkasan semua bulan</span></label>
       </div>
     </div>

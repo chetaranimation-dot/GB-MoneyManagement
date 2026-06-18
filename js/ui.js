@@ -487,19 +487,33 @@ function doExportPDF(){
   const incTx = document.getElementById('expTx') ? document.getElementById('expTx').checked : false;
   const incDebt = document.getElementById('expDebt') ? document.getElementById('expDebt').checked : false;
   const incSumCat = document.getElementById('expSummary') ? document.getElementById('expSummary').checked : false;
+  const incSavings = document.getElementById('expSavings') ? document.getElementById('expSavings').checked : false;
   const incMonthly = document.getElementById('expMonthly') ? document.getElementById('expMonthly').checked : false;
 
   // Tentukan transaksi yang disertakan
   let txs = st.transactions;
   let periodeLabel = 'Semua Periode';
+  let daysCount = 30;
+
   if(period === 'bulan-ini'){
     txs = txForMonth(curYear, curMonth);
     periodeLabel = MONTHS[curMonth] + ' ' + curYear;
+    daysCount = new Date(curYear, curMonth + 1, 0).getDate();
   } else if(period === 'pilih-bulan'){
     const sel = document.getElementById('exportBulanSel') ? document.getElementById('exportBulanSel').value : '';
     const [y, m] = sel.split('-').map(Number);
     txs = txForMonth(y, m - 1);
     periodeLabel = MONTHS[m - 1] + ' ' + y;
+    daysCount = new Date(y, m, 0).getDate();
+  } else {
+    // Semua periode
+    if (txs.length > 0) {
+      const dates = txs.map(t => new Date(t.date + 'T00:00:00').getTime());
+      const minDate = Math.min(...dates);
+      const maxDate = Math.max(...dates);
+      const diffTime = Math.abs(maxDate - minDate);
+      daysCount = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
+    }
   }
 
   const keluar = txs.filter(t => t.type === 'pengeluaran');
@@ -521,6 +535,8 @@ function doExportPDF(){
   });
 
   const now = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  const lb = st.settings.limitBulan || 0;
+  const sisaLimit = lb - totalKeluar;
 
   let html = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8">
   <title>Nota Keuangan — ${periodeLabel}</title>
@@ -532,7 +548,7 @@ function doExportPDF(){
     .divider{border:none;border-top:2px solid #1a1a1a;margin:24px 0;}
     .divider-thin{border:none;border-top:1px solid #ddd;margin:16px 0;}
     h2{font-size:14px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#444;margin-bottom:14px;}
-    .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;}
+    .summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;}
     .sum-box{border:1px solid #ddd;border-radius:4px;padding:14px;}
     .sum-lbl{font-size:10px;letter-spacing:0.15em;text-transform:uppercase;color:#888;margin-bottom:6px;font-family:monospace;}
     .sum-val{font-size:18px;font-weight:700;}
@@ -562,6 +578,26 @@ function doExportPDF(){
       <div class="sum-box"><div class="sum-lbl">Total Pengeluaran</div><div class="sum-val sum-keluar">${rp(totalKeluar)}</div></div>
       <div class="sum-box"><div class="sum-lbl">Saldo Bersih</div><div class="sum-val sum-saldo">${rp(totalMasuk - totalKeluar)}</div></div>
     </div>
+    
+    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 16px;">
+      <div style="border: 1px solid #ddd; border-radius: 4px; padding: 14px;">
+        <div class="sum-lbl">Rata-rata Pengeluaran / Hari</div>
+        <div class="sum-val" style="color:#2c3e50; font-size:18px;">${rp(Math.round(totalKeluar / daysCount))}</div>
+        <div style="font-size:9px; color:#888; font-family:monospace; margin-top:4px;">Dihitung dari ${daysCount} hari periode ini</div>
+      </div>
+      <div style="border: 1px solid #ddd; border-radius: 4px; padding: 14px;">
+        <div class="sum-lbl">Sisa Limit Bulanan</div>
+        ${lb > 0 ? `
+          <div class="sum-val" style="font-size:18px; color: ${sisaLimit >= 0 ? '#1a7a40' : '#c0392b'};">
+            ${rp(sisaLimit)}
+          </div>
+          <div style="font-size:9px; color:#888; font-family:monospace; margin-top:4px;">Batas bulanan: ${rp(lb)} (${((totalKeluar / lb) * 100).toFixed(1)}% terpakai)</div>
+        ` : `
+          <div class="sum-val" style="font-size:18px; color:#888;">—</div>
+          <div style="font-size:9px; color:#888; font-family:monospace; margin-top:4px;">Batas bulanan tidak diatur</div>
+        `}
+      </div>
+    </div>
   </div>`;
 
   if (st.exportNote && st.exportNote.trim()) {
@@ -573,10 +609,48 @@ function doExportPDF(){
 
   if(incSumCat && Object.keys(katMap).length){
     html += `<div class="section"><h2>Ringkasan per Kategori</h2>
-    <table><thead><tr><th>Kategori</th><th>Total Pengeluaran</th><th>%</th></tr></thead><tbody>`;
+    <table><thead><tr><th>Kategori</th><th>Total Pengeluaran</th><th>Batas Pemakaian</th></tr></thead><tbody>`;
     Object.entries(katMap).sort((a,b) => b[1] - a[1]).forEach(([cat,amt]) => {
-      const pct = totalKeluar ? ((amt / totalKeluar) * 100).toFixed(1) : '0';
-      html += `<tr><td>${escH(cat)}</td><td class="amt-keluar">${rp(amt)}</td><td style="color:#888;">${pct}%</td></tr>`;
+      const cLimit = st.settings.limitKategori[cat] || 0;
+      const cLimitStr = cLimit > 0 ? rp(cLimit) : '—';
+      html += `<tr><td>${escH(cat)}</td><td class="amt-keluar">${rp(amt)}</td><td style="color:#555;">${cLimitStr}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+
+  if(incSavings && st.savings && st.savings.length){
+    html += `<div class="section"><h2>Rencana Tabungan</h2>
+    <table><thead><tr><th>Nama Impian</th><th>Uang Terkumpul</th><th>Nominal Target</th><th>Sisa</th><th>Aturan Menabung</th><th>Estimasi Terpenuhi</th></tr></thead><tbody>`;
+    st.savings.forEach(g => {
+      const cur = g.current || 0;
+      const tgt = g.target || 0;
+      const rem = Math.max(0, tgt - cur);
+      const pct = tgt > 0 ? Math.min(100, Math.round((cur / tgt) * 100)) : 0;
+      const dep = g.deposit || 0;
+      const freq = g.frequency || 'minggu';
+      
+      let est = '—';
+      if (rem <= 0) {
+        est = 'Selesai';
+      } else if (dep > 0) {
+        const periods = Math.ceil(rem / dep);
+        if (freq === 'hari') {
+          est = `${periods} hari (~${Math.ceil(periods / 7)} minggu)`;
+        } else if (freq === 'minggu') {
+          est = `${periods} minggu (~${Math.ceil(periods / 4.34)} bulan)`;
+        } else if (freq === 'bulan') {
+          est = `${periods} bulan (~${(periods / 12).toFixed(1)} tahun)`;
+        }
+      }
+      
+      html += `<tr>
+        <td><strong>${escH(g.name)}</strong> <span style="color:#666; font-size:10px;">(${pct}%)</span></td>
+        <td class="amt-masuk">${rp(cur)}</td>
+        <td>${rp(tgt)}</td>
+        <td style="color:#c0392b;">${rp(rem)}</td>
+        <td>${rp(dep)} / ${freq}</td>
+        <td style="font-family:monospace; color:#8a6010;">${est}</td>
+      </tr>`;
     });
     html += `</tbody></table></div>`;
   }
@@ -1063,29 +1137,79 @@ function renderSavings() {
 }
 
 function exportToCSV() {
-  if (!st.transactions || st.transactions.length === 0) {
-    showToast('Tidak ada transaksi untuk diekspor.', 'error');
+  const includeSavings = document.getElementById('csvIncludeSavings') ? document.getElementById('csvIncludeSavings').checked : false;
+  
+  const hasTx = st.transactions && st.transactions.length > 0;
+  const hasSavings = includeSavings && st.savings && st.savings.length > 0;
+  
+  if (!hasTx && !hasSavings) {
+    showToast('Tidak ada data untuk diekspor.', 'error');
     return;
   }
   
-  // Header columns
-  const headers = ['ID', 'Tanggal', 'Jenis', 'Jumlah (Rp)', 'Kategori', 'Tag', 'Catatan'];
+  const csvRows = [];
   
-  const csvRows = [headers.map(h => `"${h.replace(/"/g, '""')}"`).join(',')];
+  if (hasTx) {
+    // Header columns
+    const headers = ['ID', 'Tanggal', 'Jenis', 'Jumlah (Rp)', 'Kategori', 'Tag', 'Catatan'];
+    csvRows.push(headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','));
+    
+    st.transactions.forEach(t => {
+      const tagsStr = (t.tags || []).join(';');
+      const row = [
+        `"${String(t.id).replace(/"/g, '""')}"`,
+        `"${String(t.date).replace(/"/g, '""')}"`,
+        t.type === 'pemasukan' ? '"Pemasukan"' : '"Pengeluaran"',
+        t.amount,
+        `"${(t.category || '').replace(/"/g, '""')}"`,
+        `"${tagsStr.replace(/"/g, '""')}"`,
+        `"${(t.note || '').replace(/"/g, '""')}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+  }
   
-  st.transactions.forEach(t => {
-    const tagsStr = (t.tags || []).join(';');
-    const row = [
-      `"${String(t.id).replace(/"/g, '""')}"`,
-      `"${String(t.date).replace(/"/g, '""')}"`,
-      t.type === 'pemasukan' ? '"Pemasukan"' : '"Pengeluaran"',
-      t.amount,
-      `"${(t.category || '').replace(/"/g, '""')}"`,
-      `"${tagsStr.replace(/"/g, '""')}"`,
-      `"${(t.note || '').replace(/"/g, '""')}"`
-    ];
-    csvRows.push(row.join(','));
-  });
+  if (hasSavings) {
+    if (csvRows.length > 0) {
+      csvRows.push('');
+      csvRows.push('');
+    }
+    csvRows.push('"RENCANA TABUNGAN"');
+    const headersSav = ['Nama Impian', 'Uang Terkumpul (Rp)', 'Nominal Target (Rp)', 'Sisa (Rp)', 'Aturan Menabung', 'Estimasi Terpenuhi'];
+    csvRows.push(headersSav.map(h => `"${h.replace(/"/g, '""')}"`).join(','));
+    
+    st.savings.forEach(g => {
+      const cur = g.current || 0;
+      const tgt = g.target || 0;
+      const rem = Math.max(0, tgt - cur);
+      const dep = g.deposit || 0;
+      const freq = g.frequency || 'minggu';
+      
+      let est = '—';
+      if (rem <= 0) {
+        est = 'Selesai';
+      } else if (dep > 0) {
+        const periods = Math.ceil(rem / dep);
+        if (freq === 'hari') {
+          est = `${periods} hari (~${Math.ceil(periods / 7)} minggu)`;
+        } else if (freq === 'minggu') {
+          est = `${periods} minggu (~${Math.ceil(periods / 4.34)} bulan)`;
+        } else if (freq === 'bulan') {
+          est = `${periods} bulan (~${(periods / 12).toFixed(1)} tahun)`;
+        }
+      }
+      
+      const row = [
+        `"${g.name.replace(/"/g, '""')}"`,
+        cur,
+        tgt,
+        rem,
+        `"${rp(dep)} per ${freq}"`,
+        `"${est}"`
+      ];
+      csvRows.push(row.join(','));
+    });
+  }
   
   // "sep=," explicitly signals to Excel that comma is the delimiter, splitting data across columns beautifully in any region setting.
   const csvString = '\uFEFF' + 'sep=,\r\n' + csvRows.join('\r\n');
