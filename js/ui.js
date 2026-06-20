@@ -161,14 +161,9 @@ function renderDashboard(){
         const tgt = g.target || 0;
         const pct = tgt > 0 ? Math.min(100, Math.round((cur / tgt) * 100)) : 0;
         return `
-          <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:4px; padding:10px; display:flex; flex-direction:column; gap:6px;">
-            <div style="display:flex; justify-content:space-between; align-items:baseline; font-size:11px; gap:8px;">
-              <span style="font-weight:500; font-family:'Playfair Display',serif; color:var(--text); text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:125px;" title="${escH(g.name)}">${escH(g.name)}</span>
-              <span style="font-family:'DM Mono',monospace; color:var(--gold-dim); font-weight:bold;">${pct}%</span>
-            </div>
-            <div style="background:var(--bg); border:1px solid var(--border); height:6px; border-radius:3px; overflow:hidden;">
-              <div style="background:var(--gold); height:100%; width:${pct}%;"></div>
-            </div>
+          <div style="background:var(--bg-mid); border:1px solid var(--border); border-radius:8px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; gap:12px; transition:all 0.2s;">
+            <span style="font-size:12px; font-weight:600; color:var(--text); text-overflow:ellipsis; overflow:hidden; white-space:nowrap;" title="${escH(g.name)}">${escH(g.name)}</span>
+            <span style="font-family:var(--font-mono); font-size:11px; background:var(--eco-teal-glow-hover); color:var(--text); border:1px solid var(--border-s); padding:2px 8px; border-radius:12px; font-weight:700;">${pct}%</span>
           </div>
         `;
       }).join('');
@@ -1152,20 +1147,20 @@ function exportToCSV() {
   if (hasTx) {
     // Header columns
     const headers = ['ID', 'Tanggal', 'Jenis', 'Jumlah (Rp)', 'Kategori', 'Tag', 'Catatan'];
-    csvRows.push(headers.map(h => `"${h.replace(/"/g, '""')}"`).join(','));
+    csvRows.push(headers.map(h => `"${h.replace(/"/g, '""').replace(/;/g, ' ')}"`).join(';'));
     
     st.transactions.forEach(t => {
-      const tagsStr = (t.tags || []).join(';');
+      const tagsStr = (t.tags || []).join(', ');
       const row = [
-        `"${String(t.id).replace(/"/g, '""')}"`,
+        `"${String(t.id).replace(/"/g, '""').replace(/;/g, ' ')}"`,
         `"${String(t.date).replace(/"/g, '""')}"`,
         t.type === 'pemasukan' ? '"Pemasukan"' : '"Pengeluaran"',
         t.amount,
-        `"${(t.category || '').replace(/"/g, '""')}"`,
-        `"${tagsStr.replace(/"/g, '""')}"`,
-        `"${(t.note || '').replace(/"/g, '""')}"`
+        `"${(t.category || '').replace(/"/g, '""').replace(/;/g, ' ')}"`,
+        `"${tagsStr.replace(/"/g, '""').replace(/;/g, ' ')}"`,
+        `"${(t.note || '').replace(/"/g, '""').replace(/;/g, ' ')}"`
       ];
-      csvRows.push(row.join(','));
+      csvRows.push(row.join(';'));
     });
   }
   
@@ -1176,7 +1171,7 @@ function exportToCSV() {
     }
     csvRows.push('"RENCANA TABUNGAN"');
     const headersSav = ['Nama Impian', 'Uang Terkumpul (Rp)', 'Nominal Target (Rp)', 'Sisa (Rp)', 'Aturan Menabung', 'Estimasi Terpenuhi'];
-    csvRows.push(headersSav.map(h => `"${h.replace(/"/g, '""')}"`).join(','));
+    csvRows.push(headersSav.map(h => `"${h.replace(/"/g, '""').replace(/;/g, ' ')}"`).join(';'));
     
     st.savings.forEach(g => {
       const cur = g.current || 0;
@@ -1200,19 +1195,19 @@ function exportToCSV() {
       }
       
       const row = [
-        `"${g.name.replace(/"/g, '""')}"`,
+        `"${g.name.replace(/"/g, '""').replace(/;/g, ' ')}"`,
         cur,
         tgt,
         rem,
         `"${rp(dep)} per ${freq}"`,
         `"${est}"`
       ];
-      csvRows.push(row.join(','));
+      csvRows.push(row.join(';'));
     });
   }
   
-  // "sep=," explicitly signals to Excel that comma is the delimiter, splitting data across columns beautifully in any region setting.
-  const csvString = '\uFEFF' + 'sep=,\r\n' + csvRows.join('\r\n');
+  // "sep=;" explicitly signals to Excel that semicolon is the delimiter, splitting data across columns beautifully in any region setting.
+  const csvString = '\uFEFF' + 'sep=;\r\n' + csvRows.join('\r\n');
   const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');

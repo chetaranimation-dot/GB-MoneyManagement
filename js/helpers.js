@@ -78,3 +78,34 @@ function save(){
     }
   }, 1500);
 }
+
+// Theme Toggle & Mode Control
+function toggleTheme(){
+  const isDark = document.documentElement.classList.contains('theme-dark');
+  if(isDark){
+    document.documentElement.classList.remove('theme-dark');
+    localStorage.setItem('gb_theme', 'light');
+  } else {
+    document.documentElement.classList.add('theme-dark');
+    localStorage.setItem('gb_theme', 'dark');
+  }
+  updateThemeUI();
+}
+
+function updateThemeUI(){
+  const isDark = document.documentElement.classList.contains('theme-dark');
+  const labelEl = document.getElementById('themeToggleLabel');
+  const iconEl = document.getElementById('themeToggleIcon');
+  if(labelEl && iconEl){
+    if(isDark){
+      labelEl.textContent = 'Dark Mode';
+      iconEl.textContent = '☾';
+    } else {
+      labelEl.textContent = 'Light Mode';
+      iconEl.textContent = '☼';
+    }
+  }
+}
+
+// Run updateThemeUI immediately upon DOM ready
+document.addEventListener('DOMContentLoaded', updateThemeUI);
