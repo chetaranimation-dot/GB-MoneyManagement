@@ -110,6 +110,187 @@ window.copyDomainToClipboard = function() {
   });
 };
 
+// Helper to show Firestore security rules instructions
+window.showFirestoreRulesInstructions = function() {
+  const container = document.getElementById('globalNotificationArea');
+  if (!container) return;
+  
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div style="background: rgba(229, 169, 60, 0.1); border: 1.5px solid #e5a93c; border-radius: 14px; padding: 20px; text-align: left; font-size: 13.5px; color: var(--text, #ffffff); line-height: 1.6; animation: slideInUp 0.4s ease; max-width: 100%; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.3); position: relative;">
+      <button onclick="document.getElementById('globalNotificationArea').style.display='none'" style="position: absolute; top: 16px; right: 16px; background: none; border: none; color: var(--text-mute, #a1a1a6); font-size: 22px; cursor: pointer; transition: color 0.2s;" title="Tutup">×</button>
+      
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; color: #e5a93c; font-weight: 700; font-size: 15px;">
+        <svg style="width: 20px; height: 20px; flex-shrink: 0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        <span>Aturan Keamanan Firestore Diperlukan (Missing/Insufficient Permissions)</span>
+      </div>
+      
+      <p style="margin-bottom: 14px; color: var(--text-mute, #a1a1a6); font-size: 12.5px;">
+        Proyek Firebase Anda saat ini memblokir penyimpanan data karena aturan keamanan (Security Rules) bawaan melarang akses tulis/baca. Selesaikan ini dengan menyalin aturan keamanan di bawah ini ke Firestore Anda.
+      </p>
+      
+      <div style="background: #18181c; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08); overflow: hidden; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 16px; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid rgba(255, 255, 255, 0.05);">
+          <span style="font-size: 11px; text-transform: uppercase; font-family: monospace; color: #a1a1aa; font-weight: 600;">Aturan Firestore (Security Rules)</span>
+          <button onclick="copyRulesToClipboard()" style="background: rgba(229, 169, 60, 0.2); border: 1px solid #e5a93c; color: #e5a93c; padding: 4px 12px; border-radius: 6px; font-size: 11.5px; cursor: pointer; transition: all 0.2s; font-weight: 600;">Salin Aturan</button>
+        </div>
+        <pre style="margin: 0; padding: 14px; font-family: monospace; font-size: 11px; color: #34d399; overflow-x: auto; line-height: 1.5; text-align: left;"><code id="firestoreRulesCode">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net catches all and denies by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUserConfig(data) {
+      return data.theme is string &&
+             data.theme.size() <= 10 &&
+             data.thresholdVeryBad is number &&
+             data.thresholdVeryBad >= 0 &&
+             data.thresholdVeryBad <= 24 &&
+             data.thresholdBad is number &&
+             data.thresholdBad >= 0 &&
+             data.thresholdBad <= 24 &&
+             data.thresholdFair is number &&
+             data.thresholdFair >= 0 &&
+             data.thresholdFair <= 24 &&
+             data.habitsConfig is list &&
+             data.habitsConfig.size() <= 50;
+    }
+
+    function isValidUserDay(data) {
+      return data.hours is number &&
+             data.hours >= 0 &&
+             data.hours <= 24 &&
+             data.completedHabits is list &&
+             data.completedHabits.size() <= 100;
+    }
+
+    function isValidDateId(id) {
+       return id is string && id.size() <= 20 && id.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
+    // Match rules
+    match /users/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUserConfig(request.resource.data);
+
+      match /config/{configId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidUserConfig(request.resource.data);
+      }
+
+      match /days/{dateId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidUserDay(request.resource.data) && isValidDateId(dateId);
+      }
+      
+      match /summary/{summaryId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId);
+      }
+
+      // Buku Kas Data Subcollection
+      match /data/{dataId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}</code></pre>
+      </div>
+      
+      <div style="font-weight: 600; color: #ffffff; margin-bottom: 8px; font-size: 12.5px;">Langkah-langkah di Firebase Console Anda:</div>
+      <ol style="margin: 0; padding-left: 20px; color: var(--text-mute, #a1a1a6); display: flex; flex-direction: column; gap: 8px; font-size: 12px;">
+        <li>Buka <a href="https://console.firebase.google.com/" target="_blank" style="color: #60a5fa; text-decoration: underline; font-weight: 600;">Firebase Console</a> Anda.</li>
+        <li>Pilih proyek Firebase Anda, lalu masuk to menu <strong>Firestore Database</strong> di panel kiri.</li>
+        <li>Klik tab <strong>Rules</strong> (Aturan) di bagian atas halaman.</li>
+        <li>Hapus aturan yang ada, lalu tempelkan (Paste) Aturan Firestore yang baru disalin di atas.</li>
+        <li>Klik tombol <strong>Publish</strong> (Publikasikan) di sudut kanan atas.</li>
+        <li>Setelah dipublikasikan, kembali ke sini dan coba klik tombol <strong>⟳ Sinkronisasi</strong> di tab Data atau simpan transaksi baru!</li>
+      </ol>
+    </div>
+  `;
+};
+
+window.copyRulesToClipboard = function() {
+  const rulesText = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net catches all and denies by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUserConfig(data) {
+      return data.theme is string &&
+             data.theme.size() <= 10 &&
+             data.thresholdVeryBad is number &&
+             data.thresholdVeryBad >= 0 &&
+             data.thresholdVeryBad <= 24 &&
+             data.thresholdBad is number &&
+             data.thresholdBad >= 0 &&
+             data.thresholdBad <= 24 &&
+             data.thresholdFair is number &&
+             data.thresholdFair >= 0 &&
+             data.thresholdFair <= 24 &&
+             data.habitsConfig is list &&
+             data.habitsConfig.size() <= 50;
+    }
+
+    // Match rules
+    match /users/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create, update: if isOwner(userId) && isValidUserConfig(request.resource.data);
+
+      match /config/{configId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidUserConfig(request.resource.data);
+      }
+
+      match /days/{dateId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId) && isValidUserDay(request.resource.data) && isValidDateId(dateId);
+      }
+      
+      match /summary/{summaryId} {
+        allow read, delete: if isOwner(userId);
+        allow create, update: if isOwner(userId);
+      }
+
+      // Buku Kas Data Subcollection
+      match /data/{dataId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}`;
+  navigator.clipboard.writeText(rulesText).then(() => {
+    showToast("Aturan Firestore disalin ke clipboard!", "success");
+  }).catch(() => {
+    showToast("Gagal menyalin otomatis, silakan salin secara manual.", "error");
+  });
+};
+
 // Log Out
 window.handleLogout = async function() {
   if (!auth) return;
@@ -146,6 +327,11 @@ window.saveToFirebase = async function() {
   } catch (err) {
     showSyncStatus('error', 'Gagal simpan');
     console.error("Firebase save error:", err);
+    if (err.code === 'permission-denied' || (err.message && err.message.toLowerCase().includes('permission'))) {
+      if (typeof window.showFirestoreRulesInstructions === 'function') {
+        window.showFirestoreRulesInstructions();
+      }
+    }
   }
 };
 
@@ -190,6 +376,11 @@ window.syncFromFirebase = async function() {
   } catch (err) {
     showSyncStatus('error', 'Gagal sinkronisasi');
     console.error("Firebase sync error:", err);
+    if (err.code === 'permission-denied' || (err.message && err.message.toLowerCase().includes('permission'))) {
+      if (typeof window.showFirestoreRulesInstructions === 'function') {
+        window.showFirestoreRulesInstructions();
+      }
+    }
   }
 };
 
