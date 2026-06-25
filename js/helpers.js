@@ -63,7 +63,7 @@ function localSave(){
   localStorage.setItem(KEY, JSON.stringify(st)); 
 }
 
-// Save Local & Trigger Cloud Drive Sync
+// Save Local & Trigger Cloud Firebase Sync
 function save(){
   localSave();
   if(!isLoggedIn){ 
@@ -73,8 +73,8 @@ function save(){
   clearTimeout(syncTimer);
   showSyncStatus('syncing', 'Menyimpan...');
   syncTimer = setTimeout(() => {
-    if (typeof saveToDrive === 'function') {
-      saveToDrive();
+    if (typeof saveToFirebase === 'function') {
+      saveToFirebase();
     }
   }, 1500);
 }

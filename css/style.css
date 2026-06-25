@@ -1083,3 +1083,198 @@ tbody tr.day-sep-row:hover{background:transparent !important;}
   color: var(--text);
 }
 
+/* ══════════════════════════════════════════════════════
+   FIREBASE LOGIN OVERLAY & PROFILE CARD STYLING
+   ══════════════════════════════════════════════════════ */
+
+.login-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at center, #1e1e24 0%, #121215 100%);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.5s;
+  pointer-events: auto;
+}
+
+.login-overlay.logged-in {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.login-card {
+  background: rgba(30, 30, 35, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 48px;
+  text-align: center;
+  max-width: 460px;
+  width: 90%;
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+  animation: slideInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.login-logo {
+  font-size: 32px;
+  font-weight: 800;
+  color: #121214;
+  background: var(--gold, #e5a93c);
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  margin: 0 auto 28px;
+  font-family: var(--font-sans);
+  box-shadow: 0 8px 24px rgba(229, 169, 60, 0.35);
+  letter-spacing: -0.03em;
+}
+
+.login-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 12px;
+  font-family: var(--font-sans);
+  letter-spacing: -0.02em;
+}
+
+.login-subtitle {
+  font-size: 14px;
+  color: #a1a1a6;
+  margin-bottom: 36px;
+  line-height: 1.6;
+}
+
+.btn-google-login {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: #ffffff;
+  color: #121214;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 15px 28px;
+  border-radius: 12px;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.btn-google-login:hover {
+  background: #f4f4f5;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.25);
+}
+
+.btn-google-login svg {
+  transition: transform 0.25s ease;
+}
+
+.btn-google-login:hover svg {
+  transform: scale(1.1);
+}
+
+/* User Profile Card in Header */
+.user-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px 12px;
+  height: 42px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+}
+
+.user-profile-card:hover {
+  border-color: var(--text-mute);
+}
+
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid var(--border);
+  background: var(--bg-mid);
+}
+
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.user-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-email {
+  font-size: 9px;
+  color: var(--text-mute);
+  line-height: 1.25;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-logout-btn {
+  background: none;
+  border: none;
+  color: var(--text-mute);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin-left: 6px;
+}
+
+.user-logout-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.user-logout-btn:hover {
+  color: var(--red);
+  background: rgba(220, 53, 69, 0.1);
+}
+

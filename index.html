@@ -25,13 +25,10 @@
 <!-- Modular JavaScript Files (Loaded in dependency order) -->
 <script src="js/config.js"></script>
 <script src="js/helpers.js"></script>
-<script src="js/drive.js"></script>
+<script type="module" src="js/firebase.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
-
-<!-- Google Identity Services (GIS) - Maps dynamic authentication -->
-<script src="https://accounts.google.com/gsi/client" onload="gisLoaded()" async defer></script>
 </head>
 <body>
 <div class="wrap">
@@ -49,7 +46,6 @@
           <span class="sync-dot" id="syncDot"></span>
           <span class="sync-label" id="syncLabel">—</span>
         </div>
-        <div class="auth-user" id="authUser" style="display:none;"></div>
       </div>
     </div>
   </div>
@@ -66,11 +62,8 @@
       <button class="tab" onclick="switchTab('data')">Data</button>
     </div>
 
-    <!-- Auth Buttons -->
-    <div class="auth-section">
-      <button class="btn-login" id="loginBtn" onclick="handleLogin()" style="padding:10px 16px; font-size:11px; font-weight:600; border-radius:10px;">↳ Login Google</button>
-      <button class="btn-logout" id="logoutBtn" onclick="handleLogout()" style="display:none; padding:10px 16px; font-size:11px; font-weight:600; border-radius:10px;">Keluar</button>
-    </div>
+    <!-- Dynamic User Profile & Logout Section -->
+    <div id="authUser" style="display:none;"></div>
   </div>
 </header>
 
@@ -299,8 +292,8 @@
 <!-- ═══ DATA ═══ -->
 <div class="panel" id="panel-data">
   <div class="info-box">
-    <strong id="driveInfoTitle">Sinkronisasi Google Drive</strong><br>
-    <span id="driveInfoBody">Login terlebih dahulu untuk mengaktifkan sinkronisasi otomatis. Data tersimpan ke <strong>buku_kas_data.json</strong> di Drive kamu.</span>
+    <strong id="driveInfoTitle">Sinkronisasi Cloud Firebase</strong><br>
+    <span id="driveInfoBody">Data keuangan Anda disinkronkan secara otomatis dan aman ke cloud menggunakan <strong>Google Firebase Firestore</strong> secara real-time.</span>
   </div>
   <div class="data-actions" style="gap:10px; margin-bottom:12px;">
     <button class="btn" onclick="openExportModal()">↓ Ekspor Nota PDF</button>

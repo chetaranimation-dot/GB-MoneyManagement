@@ -200,14 +200,6 @@ function initAll(){
 }
 
 function init(){
-  // Peringatan jika Google API tidak berhasil dimuat dalam 8 detik
-  setTimeout(() => {
-    if(!gisReady){
-      showToast('Google API gagal dimuat. Cek koneksi internet lalu refresh halaman.', 'error');
-      console.warn('[BukuKas] GIS tidak siap setelah 8 detik');
-    }
-  }, 8000);
-  
   initDate();
   
   const today = new Date().toISOString().slice(0, 10);
@@ -378,10 +370,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Auto-sync saat koneksi kembali
   window.addEventListener('online', async () => {
-    if(!isLoggedIn || !getToken()) return;
+    if(!isLoggedIn) return;
     showSyncStatus('syncing', 'Koneksi kembali...');
     showToast('Koneksi kembali — menyinkronkan data...', '');
-    await saveToDrive();
+    if (typeof saveToFirebase === 'function') {
+      await saveToFirebase();
+    }
   });
 
   window.addEventListener('offline', () => {
