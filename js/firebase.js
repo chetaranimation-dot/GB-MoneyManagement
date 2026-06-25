@@ -9,12 +9,13 @@ import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/fireb
 // Firebase configuration from environment or direct manual setup.
 // If configuring via the AI Studio editor settings, use these exact VITE_ variables.
 const firebaseConfig = {
-  apiKey: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_API_KEY) || "YOUR_API_KEY",
-  authDomain: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_AUTH_DOMAIN) || "",
-  projectId: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_PROJECT_ID) || "",
-  storageBucket: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_STORAGE_BUCKET) || "",
-  messagingSenderId: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID) || "",
-  appId: (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_FIREBASE_APP_ID) || ""
+  apiKey: "AIzaSyBW51yFOUgEtAuL3KLhbR0npQbabs2G7dA",
+  authDomain: "gabriel-protocol.firebaseapp.com",
+  projectId: "gabriel-protocol",
+  storageBucket: "gabriel-protocol.firebasestorage.app",
+  messagingSenderId: "792718635622",
+  appId: "1:792718635622:web:a86a59cb1189bba8a9f3a7",
+  measurementId: "G-38SWDYZFWC"
 };
 
 // Check if credentials are placeholders or actually supplied
@@ -293,10 +294,11 @@ service cloud.firestore {
 
 // Log Out
 window.handleLogout = async function() {
-  if (!auth) return;
   if (!confirm("Apakah Anda yakin ingin keluar?")) return;
   try {
-    await signOut(auth);
+    if (auth) {
+      await signOut(auth);
+    }
     showToast("Berhasil keluar.", "success");
     // Reload state and show login screen
     location.reload();
