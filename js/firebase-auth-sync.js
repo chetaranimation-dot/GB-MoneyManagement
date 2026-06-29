@@ -412,11 +412,12 @@ window.kirimRingkasanKeHub = async function() {
   const userId = auth.currentUser.uid;
   const dataCollRef = collection(db, "users", userId, "data");
   const configRef = doc(db, "users", userId, "config", "main");
+  const hubRef = doc(db, "users", userId, "summary", "money");
   
   try {
     const transactions = (typeof st !== 'undefined' && st && st.transactions) ? st.transactions : [];
     
-    // 1. Sync Limit Bulanan
+    // 1. Sync Limit Bulanan to Config
     const limitBulanan = (typeof st !== 'undefined' && st && st.settings && st.settings.limitBulan) || 0;
     await setDoc(configRef, { limitBulanan: limitBulanan }, { merge: true });
     
@@ -469,7 +470,36 @@ window.kirimRingkasanKeHub = async function() {
       await Promise.all(deletePromises);
     }
     
-    console.log("[Firebase] Berhasil sinkronisasi transaksi & limit ke Web Homepage.");
+    // 3. Calculate and Sync Summary/Money (Web Homepage Summary Hub)
+    const targetYear = (typeof curYear !== 'undefined' && curYear) ? curYear : new Date().getFullYear();
+    const targetMonth = (typeof curMonth !== 'undefined' && curMonth !== null) ? curMonth : new Date().getMonth();
+    const txs = typeof txForMonth === 'function' ? txForMonth(targetYear, targetMonth) : [];
+    
+    // Monthly calculations (based on active selected month, matching the dashboard)
+    const currentMonthMasuk = txs.filter(t => t.type === 'pemasukan').reduce((a, t) => a + t.amount, 0);
+    const totalExpense = txs.filter(t => t.type === 'pengeluaran').reduce((a, t) => a + t.amount, 0);
+    const netBalance = currentMonthMasuk - totalExpense;
+    
+    // Average Daily Expense (using actual recorded expense days)
+    const hariKeluar = new Set(txs.filter(t => t.type === 'pengeluaran').map(t => t.date));
+    const jmlHari = hariKeluar.size;
+    const avgExpenseDay = jmlHari > 0 ? Math.round(totalExpense / jmlHari) : 0;
+    
+    // Sisa Limit Bulanan
+    const lb = (typeof st !== 'undefined' && st && st.settings && st.settings.limitBulan) || 0;
+    const remainingMonthlyLimit = lb > 0 ? (lb - totalExpense) : 0;
+    
+    const payload = {
+      netBalance: netBalance,
+      totalExpense: totalExpense,
+      avgExpenseDay: avgExpenseDay,
+      remainingMonthlyLimit: remainingMonthlyLimit,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    await setDoc(hubRef, payload, { merge: true });
+    
+    console.log("[Firebase] Berhasil sinkronisasi transaksi, limit, dan data ringkasan ke Web Homepage:", payload);
   } catch (err) {
     console.error("[Firebase] Gagal sinkronisasi ke Web Homepage:", err);
   }
