@@ -196,7 +196,7 @@ service cloud.firestore {
       }
 
       // Buku Kas Data Subcollection
-      match /data/{dataId} {
+      match /mmdata/{dateId} {
         allow read, write: if isOwner(userId);
       }
     }
@@ -277,7 +277,7 @@ service cloud.firestore {
       }
 
       // Buku Kas Data Subcollection
-      match /data/{dataId} {
+      match /mmdata/{dateId} {
         allow read, write: if isOwner(userId);
       }
     }
@@ -316,8 +316,8 @@ window.saveToFirebase = async function() {
   showSyncStatus('syncing', 'Menyimpan...');
   
   try {
-    // 1. Save main state to Firestore
-    const dataRef = doc(db, "users", userId, "data", "buku_kas");
+    // 1. Save main state to Firestore (using "mmdata" path to match user intent)
+    const dataRef = doc(db, "users", userId, "mmdata", "buku_kas");
     await setDoc(dataRef, st, { merge: false }); // save entire state object
     
     // 2. Refresh the real-time summary hub for the main homepage!
@@ -343,8 +343,20 @@ window.syncFromFirebase = async function() {
   showSyncStatus('syncing', 'Mengunduh...');
   
   try {
-    const dataRef = doc(db, "users", userId, "data", "buku_kas");
-    const docSnap = await getDoc(dataRef);
+    const dataRef = doc(db, "users", userId, "mmdata", "buku_kas");
+    let docSnap = await getDoc(dataRef);
+    
+    // Auto-migration from legacy "data" path if "mmdata" does not exist yet
+    if (!docSnap.exists()) {
+      const legacyRef = doc(db, "users", userId, "data", "buku_kas");
+      const legacySnap = await getDoc(legacyRef);
+      if (legacySnap.exists()) {
+        console.log("[Firebase] Data lama ditemukan di 'data/buku_kas'. Melakukan migrasi ke 'mmdata/buku_kas'...");
+        const legacyData = legacySnap.data();
+        await setDoc(dataRef, legacyData);
+        docSnap = await getDoc(dataRef);
+      }
+    }
     
     if (docSnap.exists()) {
       const cloudData = docSnap.data();
@@ -406,11 +418,12 @@ window.manualSync = async function() {
 // ── HUB SUMMARY EXPORTER (Web C Reflection) ──
 
 // Calculates metrics and sends them to the parent homepage hub path: users/{USER_ID}/summary/money
+// Also stores daily transactions at path: users/{userId}/mmdata/{dateId} (dateId: YYYY-MM-DD)
 window.kirimRingkasanKeHub = async function() {
   if (!auth || !db || !auth.currentUser) return;
   
   const userId = auth.currentUser.uid;
-  const dataCollRef = collection(db, "users", userId, "data");
+  const mmdataCollRef = collection(db, "users", userId, "mmdata");
   const configRef = doc(db, "users", userId, "config", "main");
   const hubRef = doc(db, "users", userId, "summary", "money");
   
@@ -421,85 +434,152 @@ window.kirimRingkasanKeHub = async function() {
     const limitBulanan = (typeof st !== 'undefined' && st && st.settings && st.settings.limitBulan) || 0;
     await setDoc(configRef, { limitBulanan: limitBulanan }, { merge: true });
     
-    // 2. Sync transactions
-    // To handle deletions, we first get all existing documents in 'data' subcollection
-    const querySnapshot = await getDocs(dataCollRef);
+    // 2. Sync transactions grouped by Date ID (YYYY-MM-DD)
+    // To handle deletions, we first get all existing documents in 'mmdata' subcollection
+    const querySnapshot = await getDocs(mmdataCollRef);
     const existingDocIds = [];
     querySnapshot.forEach((docSnap) => {
-      // Ignore the app's own state document
+      // Ignore the app's own state document 'buku_kas'
       if (docSnap.id !== 'buku_kas') {
          existingDocIds.push(docSnap.id);
       }
     });
     
-    // Save/Update current transactions
-    const currentTxIds = new Set();
-    const savePromises = transactions.map(tx => {
-      currentTxIds.add(tx.id);
-      
-      // Convert to valid ISO string at noon UTC to ensure correct date falls on the same calendar day in all timezones
-      let isoDate = tx.date;
-      try {
-        if (!isoDate.includes('T')) {
-          if (/^\d{4}-\d{2}-\d{2}$/.test(tx.date)) {
-            isoDate = tx.date + "T12:00:00.000Z";
-          } else {
-            isoDate = new Date(tx.date).toISOString();
-          }
+    // Group transactions by YYYY-MM-DD
+    const groupedTransactions = {};
+    transactions.forEach(tx => {
+      let dateId = tx.date;
+      if (dateId.includes('T')) {
+        dateId = dateId.split('T')[0];
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateId)) {
+        try {
+          dateId = new Date(tx.date).toISOString().split('T')[0];
+        } catch (e) {
+          dateId = new Date().toISOString().split('T')[0];
         }
-      } catch(e) {}
+      }
       
-      return setDoc(doc(db, "users", userId, "data", tx.id), {
+      if (!groupedTransactions[dateId]) {
+        groupedTransactions[dateId] = [];
+      }
+      groupedTransactions[dateId].push({
+        id: tx.id,
         amount: Number(tx.amount),
         type: tx.type,
-        date: isoDate,
-        deskripsi: tx.note || tx.category || 'Transaksi'
-      }); // Do not merge, we want to fully replace the transaction document
+        category: tx.category || '—',
+        note: tx.note || '',
+        tags: tx.tags ? [...tx.tags] : []
+      });
+    });
+    
+    // Save/Update daily transaction documents to users/{userId}/mmdata/{dateId}
+    const currentDocIds = new Set(Object.keys(groupedTransactions));
+    const savePromises = Object.keys(groupedTransactions).map(dateId => {
+      const dayTxs = groupedTransactions[dateId];
+      const dayMasuk = dayTxs.filter(t => t.type === 'pemasukan').reduce((a, t) => a + t.amount, 0);
+      const dayKeluar = dayTxs.filter(t => t.type === 'pengeluaran').reduce((a, t) => a + t.amount, 0);
+      
+      return setDoc(doc(db, "users", userId, "mmdata", dateId), {
+        transactions: dayTxs,
+        date: dateId,
+        totalMasuk: dayMasuk,
+        totalKeluar: dayKeluar,
+        netBalance: dayMasuk - dayKeluar,
+        amount: dayKeluar > 0 ? dayKeluar : dayMasuk,
+        type: dayKeluar > 0 ? 'pengeluaran' : 'pemasukan',
+        deskripsi: dayTxs.map(t => t.note || t.category).join(', ') || 'Transaksi'
+      });
     });
     
     await Promise.all(savePromises);
     
-    // Delete missing transactions
+    // Delete date documents that no longer have any transactions
     const deletePromises = [];
     for (const docId of existingDocIds) {
-      if (!currentTxIds.has(docId)) {
-        deletePromises.push(deleteDoc(doc(db, "users", userId, "data", docId)));
+      if (!currentDocIds.has(docId)) {
+        deletePromises.push(deleteDoc(doc(db, "users", userId, "mmdata", docId)));
       }
     }
     if (deletePromises.length > 0) {
       await Promise.all(deletePromises);
     }
     
-    // 3. Calculate and Sync Summary/Money (Web Homepage Summary Hub)
-    const targetYear = (typeof curYear !== 'undefined' && curYear) ? curYear : new Date().getFullYear();
-    const targetMonth = (typeof curMonth !== 'undefined' && curMonth !== null) ? curMonth : new Date().getMonth();
-    const txs = typeof txForMonth === 'function' ? txForMonth(targetYear, targetMonth) : [];
+    // 3. Calculate and Sync Summary/Money for ALL months in transaction history
+    // Group transactions by YYYY-MM
+    const monthlyGroups = {};
+    const now = new Date();
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    monthlyGroups[currentYearMonth] = [];
     
-    // Monthly calculations (based on active selected month, matching the dashboard)
-    const currentMonthMasuk = txs.filter(t => t.type === 'pemasukan').reduce((a, t) => a + t.amount, 0);
-    const totalExpense = txs.filter(t => t.type === 'pengeluaran').reduce((a, t) => a + t.amount, 0);
-    const netBalance = currentMonthMasuk - totalExpense;
+    const activeYear = (typeof curYear !== 'undefined' && curYear) ? curYear : now.getFullYear();
+    const activeMonth = (typeof curMonth !== 'undefined' && curMonth !== null) ? curMonth : now.getMonth();
+    const activeYearMonth = `${activeYear}-${String(activeMonth + 1).padStart(2, '0')}`;
+    monthlyGroups[activeYearMonth] = [];
     
-    // Average Daily Expense (using actual recorded expense days)
-    const hariKeluar = new Set(txs.filter(t => t.type === 'pengeluaran').map(t => t.date));
-    const jmlHari = hariKeluar.size;
-    const avgExpenseDay = jmlHari > 0 ? Math.round(totalExpense / jmlHari) : 0;
+    transactions.forEach(tx => {
+      let dateStr = tx.date;
+      if (dateStr.includes('T')) {
+        dateStr = dateStr.split('T')[0];
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        const ym = dateStr.substring(0, 7); // "YYYY-MM"
+        if (!monthlyGroups[ym]) {
+          monthlyGroups[ym] = [];
+        }
+        monthlyGroups[ym].push(tx);
+      }
+    });
     
-    // Sisa Limit Bulanan
-    const lb = (typeof st !== 'undefined' && st && st.settings && st.settings.limitBulan) || 0;
-    const remainingMonthlyLimit = lb > 0 ? (lb - totalExpense) : 0;
+    const allMonthlySummaries = {};
+    for (const ym of Object.keys(monthlyGroups)) {
+      const txs = monthlyGroups[ym];
+      const masuk = txs.filter(t => t.type === 'pemasukan').reduce((a, t) => a + t.amount, 0);
+      const keluar = txs.filter(t => t.type === 'pengeluaran').reduce((a, t) => a + t.amount, 0);
+      const net = masuk - keluar;
+      
+      const hariKeluar = new Set(txs.filter(t => t.type === 'pengeluaran').map(t => {
+        let d = t.date;
+        if (d.includes('T')) d = d.split('T')[0];
+        return d;
+      }));
+      const jmlHari = hariKeluar.size;
+      const avgExpense = jmlHari > 0 ? Math.round(keluar / jmlHari) : 0;
+      const remainingLimit = limitBulanan > 0 ? (limitBulanan - keluar) : 0;
+      
+      allMonthlySummaries[ym] = {
+        netBalance: net,
+        totalExpense: keluar,
+        totalIncome: masuk,
+        avgExpenseDay: avgExpense,
+        remainingMonthlyLimit: remainingLimit,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      // Save individual month document to summary subcollection: users/{userId}/summary/{ym}
+      const monthlySummaryRef = doc(db, "users", userId, "summary", ym);
+      await setDoc(monthlySummaryRef, allMonthlySummaries[ym], { merge: true });
+    }
     
-    const payload = {
-      netBalance: netBalance,
-      totalExpense: totalExpense,
-      avgExpenseDay: avgExpenseDay,
-      remainingMonthlyLimit: remainingMonthlyLimit,
+    // Save active selected month as top-level payload in users/{userId}/summary/money, with the 'months' map containing everything
+    const activeSummary = allMonthlySummaries[activeYearMonth] || {
+      netBalance: 0,
+      totalExpense: 0,
+      totalIncome: 0,
+      avgExpenseDay: 0,
+      remainingMonthlyLimit: limitBulanan,
       lastUpdated: new Date().toISOString()
     };
     
-    await setDoc(hubRef, payload, { merge: true });
+    const moneyPayload = {
+      ...activeSummary,
+      months: allMonthlySummaries,
+      lastUpdated: new Date().toISOString()
+    };
     
-    console.log("[Firebase] Berhasil sinkronisasi transaksi, limit, dan data ringkasan ke Web Homepage:", payload);
+    await setDoc(hubRef, moneyPayload, { merge: true });
+    
+    console.log("[Firebase] Berhasil sinkronisasi transaksi harian, limit, dan data ringkasan bulanan ke Web Homepage:", moneyPayload);
   } catch (err) {
     console.error("[Firebase] Gagal sinkronisasi ke Web Homepage:", err);
   }
